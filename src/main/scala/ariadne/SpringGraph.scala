@@ -5,6 +5,7 @@ import at.ait.dme.forcelayout.quadtree.{ Body, Quad, QuadTree }
 import scala.collection.parallel.ParSeq
 
 import spire.syntax.cfor._
+import spire.util.Opt
 
 trait DirectedGraph[V, E] {
   type EIndex = Int
@@ -159,52 +160,49 @@ class SpringGraph(val graph: DirectedGraph[Node, Edge]) {
     }
 
   def computeBarnesHut(): Unit = {
-    val bodies = (0 until graph.numVertices).map(v => Body(NodeState(v).pos, v))
+    val bodies = (0 until graph.numVertices).map(v => Body(pos(v), v))
 
     val quadtree = new QuadTree(bounds, bodies)
+    cforRange(0 until graph.numVertices)( v => apply(v, quadtree.root) )
 
     def apply(v: Int, quad: Quad): Unit = {
-      val state = NodeState(v)
       val s = (quad.bounds.width + quad.bounds.height) / 2
-      val d = (quad.center - state.pos).magnitude
+      val d = (quad.center - pos(v)).magnitude
       if (s/d > THETA) {
         // Nearby quad
         quad.children match {
-          case Some(seq) =>
-            seq.foreach(child => apply(v, child))
-          case None => quad.body match {
-            case Some(b) =>
-              val d = b.pos - state.pos
+          case Opt(seq) =>
+            cforRange(0 until seq.size)( i => apply(v, seq(i)) )
+          case _ => quad.body match {
+            case Opt(b) =>
+              val d = b.pos - pos(v)
               val distance = d.magnitude
               val direction = d.normalize
 
               if (b.index != v)
-                state.force += direction :* (REPULSION / (distance * distance * 0.5f))
-            case None =>
+                frc(v) += direction :* (REPULSION / (distance * distance * 0.5f))
+            case _ =>
           }
         }
       } else {
         // Far-away quad
-        val d = quad.center - state.pos
+        val d = quad.center - pos(v)
         val distance = d.magnitude
         val direction = d.normalize
-        state.force += direction :* (REPULSION * quad.bodies / (distance * distance * 0.5f))
+        frc(v) += direction :* (REPULSION * quad.bodies / (distance * distance * 0.5f))
       }
     }
 
-    cforRange(0 until graph.numVertices)( v => apply(v, quadtree.root) )
   }
 
   def computeDrag(): Unit =
     cforRange(0 until graph.numVertices) { v =>
-      val state = NodeState(v)
-      state.force += state.velocity :* DRAG
+      frc(v) += vel(v) :* DRAG
     }
   
   def computeGravity(): Unit =
     cforRange(0 until graph.numVertices) { v =>
-      val state = NodeState(v)
-      state.force += state.pos.normalize :* (CENTER_GRAVITY * graph.mass(v))
+      frc(v) += pos(v).normalize :* (CENTER_GRAVITY * graph.mass(v))
     }
 
   def updateForces(): Unit = {
@@ -216,13 +214,12 @@ class SpringGraph(val graph: DirectedGraph[Node, Edge]) {
 
   def updateVelocitiesAndPositions(): Unit =
     cforRange(0 until graph.numVertices) { v =>
-      val state = NodeState(v)
-      val acceleration = NodeState(v).force :/ graph.mass(v)
-      state.force = Float2D.zero
-      state.velocity += acceleration :* TIMESTEP
-      if (state.velocity.magnitude > MAX_VELOCITY)
-        state.velocity = state.velocity.normalize :* MAX_VELOCITY
-      state.pos += state.velocity :* TIMESTEP
+      val acceleration = frc(v) :/ graph.mass(v)
+      frc(v) = Float2D.zero
+      vel(v) += acceleration :* TIMESTEP
+      if (vel(v).magnitude > MAX_VELOCITY)
+        vel(v) = vel(v).normalize :* MAX_VELOCITY
+      pos(v) += vel(v) :* TIMESTEP
     }
 
   def totalKinematicEnergy =

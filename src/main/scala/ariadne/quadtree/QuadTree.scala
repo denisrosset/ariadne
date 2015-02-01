@@ -1,6 +1,7 @@
 package at.ait.dme.forcelayout.quadtree
 
 import at.ait.dme.forcelayout.{ Bounds, Float2D }
+import spire.util.Opt
 
 /**
  * An immutable quadtree implementation.
@@ -17,11 +18,11 @@ class QuadTree(bounds: Bounds, bodies: Seq[Body]) {
       Quad(bounds, bounds.center, 0)
     } else if (bodies.size == 1) {
       val body = bodies.head
-      Quad(bounds, body.pos, 1, Some(body))
+      Quad(bounds, body.pos, 1, Opt(body))
     } else {
       val children = subdivideBounds(bounds)
         .map(subbounds => build(subbounds, 	clipBodies(bodies, subbounds)))
-      Quad(bounds, computeCenter(bodies), bodies.size, None, Some(children))
+      Quad(bounds, computeCenter(bodies), bodies.size, Opt.empty[Body], Opt(children))
     }
   }  
 

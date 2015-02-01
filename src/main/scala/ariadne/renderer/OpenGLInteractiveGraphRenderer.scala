@@ -16,7 +16,7 @@ class OpenGLInteractiveGraphRenderer(graph: SpringGraph) extends Canvas with Gra
   private var currentYOffset = 0.0f
   private var lastMousePos = new Point(0, 0)
   
-  private var selectedNode: Option[Node] = None
+  private var selectedNode: Option[Int] = None
   
   private var strategy: BufferStrategy = null
   
@@ -33,7 +33,7 @@ class OpenGLInteractiveGraphRenderer(graph: SpringGraph) extends Canvas with Gra
     override def mouseClicked(e: MouseEvent) {
       val size = getSize()
       val coords = toGraphCoords(graph, e.getPoint, size.getWidth.toInt, size.getHeight.toInt, currentXOffset, currentYOffset, currentZoom)
-//      selectedNode = Some(graph.getNearestNode(coords))
+      selectedNode = Some(graph.getNearestNode(coords))
       doPaint(strategy)
     }
     
