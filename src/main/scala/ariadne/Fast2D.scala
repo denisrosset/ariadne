@@ -11,8 +11,14 @@ class Int2D(val u: Long) extends AnyVal {
 
   final def negate: Int2D = new Int2D(FastInt2D.negate(u))
 
-  final def +(b: Float2D) = new Float2D(FastFloat2D.add(u, b.u))
-  final def -(b: Float2D) = new Float2D(FastFloat2D.subtract(u, b.u))
+  final def +(b: Int2D) = new Int2D(FastInt2D.add(u, b.u))
+  final def -(b: Int2D) = new Int2D(FastInt2D.subtract(u, b.u))
+
+  final def :*(b: Int) = new Int2D(FastInt2D.multiply(u, b))
+  final def :/(b: Int) = new Int2D(FastInt2D.divide(u, b))
+
+  final def toFloat: Float2D = Float2D(x.toFloat, y.toFloat)
+
 }
 
 object Int2D {
@@ -46,8 +52,13 @@ object FastInt2D {
   // subtraction
   final def subtract(a: Long, b: Long): Long = encode(x(a) - x(b), y(a) - y(b))
 
+  // multiplication
+  final def multiply(a: Long, b: Int): Long = encode(x(a) * b, y(a) * b)
+
+  // division
+  final def divide(a: Long, b: Int): Long = encode(x(a) / b, y(a) / b)
 }
- 
+
 /** Value class encoding a single precision 2D vector in a Long.
   * 
   * Based on Spire's FloatComplex class.

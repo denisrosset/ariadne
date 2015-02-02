@@ -69,10 +69,11 @@ class OpenGLInteractiveGraphRenderer(val gLayout: SpringLayout) extends Canvas w
         RenderingHints.VALUE_FRACTIONALMETRICS_ON)
     
     val bounds = getSize
-    render(g2d, gLayout, bounds.getWidth.toInt, bounds.getHeight.toInt, selectedNode, currentXOffset, currentYOffset, currentZoom)
+    val bnds = Int2D(bounds.getWidth.toInt, bounds.getHeight.toInt)
+    val viewpoint = Viewpoint(bnds, Float2D(currentXOffset, currentYOffset), currentZoom)
+    render(g2d, gLayout, selectedNode, viewpoint)
     g2d.dispose
     strategy.show
   }
 
 }
-
