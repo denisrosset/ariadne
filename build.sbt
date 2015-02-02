@@ -17,7 +17,9 @@ initialCommands in console := """import com.faacets.ariadne._"""
 libraryDependencies ++= Seq(
   "org.spire-math" %% "spire" % "0.9.1-SNAPSHOT",
   "com.propensive" % "rapture-io" % "0.7.2",
-  "org.typelevel" %% "machinist" % "0.3.0"
+  "org.typelevel" %% "machinist" % "0.3.0",
+  "org.apache.xmlgraphics" % "batik-dom" % "1.7", // for svg gen
+  "org.apache.xmlgraphics" % "batik-svggen" % "1.7" // for svg gen
 )
 
 publishMavenStyle := true

@@ -1,4 +1,4 @@
-package at.ait.dme.forcelayout
+package com.faacets.ariadne
 
 /**
  * An edge in the force layout simulation.

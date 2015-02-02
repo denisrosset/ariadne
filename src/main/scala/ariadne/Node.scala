@@ -1,4 +1,4 @@
-package at.ait.dme.forcelayout
+package com.faacets.ariadne
 
 /**
  * A node in the force layout simulation. The node has an immutable component, representing the actual 

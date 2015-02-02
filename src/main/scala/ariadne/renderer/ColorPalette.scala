@@ -1,4 +1,5 @@
-package at.ait.dme.forcelayout.renderer
+package com.faacets.ariadne
+package renderer
 
 import java.awt.Color
 

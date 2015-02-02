@@ -1,7 +1,24 @@
-package at.ait.dme.forcelayout.quadtree
+package com.faacets.ariadne
+package quadtree
 
-import at.ait.dme.forcelayout.{ Bounds, Float2D }
 import spire.util.Opt
+
+/**
+ * A body in the quadtree.
+ * @author Rainer Simon <rainer.simon@ait.ac.at>
+ */
+case class Body(pos: Float2D, index: Int)
+
+/**
+ * A quad in the quadtree.
+ * @author Rainer Simon <rainer.simon@ait.ac.at>
+ */
+case class Quad(
+    bounds: Bounds, 
+    center: Float2D,
+    bodies: Int,
+    body: Opt[Body] = Opt.empty[Body], 
+    children: Opt[Seq[Quad]] = Opt.empty[Seq[Quad]])
 
 /**
  * An immutable quadtree implementation.

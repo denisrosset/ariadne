@@ -1,4 +1,4 @@
-package at.ait.dme.forcelayout
+package com.faacets.ariadne
 
 import scala.util.Random
 

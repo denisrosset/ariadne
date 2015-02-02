@@ -1,53 +1,32 @@
-package at.ait.dme.forcelayout
-
-import at.ait.dme.forcelayout.quadtree.{ Body, Quad, QuadTree }
+package com.faacets.ariadne
 
 import scala.collection.parallel.ParSeq
 
 import spire.syntax.cfor._
 import spire.util.Opt
 
-trait DirectedGraph[V, E] {
-  type EIndex = Int
-  type VIndex = Int
-  def numVertices: Int
-  def numEdges: Int
-  def vertex(v: VIndex): V
-  def edge(e: EIndex): E
-  def head(e: EIndex): VIndex
-  def tail(e: EIndex): VIndex
+import quadtree._
 
-  def inEdges(v: VIndex): Set[EIndex]
-  def outEdges(v: VIndex): Set[EIndex]
+trait Layout {
+  def graph: DirectedGraph[Node, Edge]
+  def vertexPosition(v: VIndex): Float2D
+  def step(): Unit
+  def totalKinematicEnergy: Float
 
-  def endVertices(e: EIndex): Set[VIndex] = Set(head(e), tail(e))
-  def edges(v: VIndex): Set[EIndex] = inEdges(v) ++ outEdges(v)
-
-  def mass(v: VIndex): Float
-  def weight(e: EIndex): Float
+  def doLayout(onComplete: (Int => Unit) = null, onIteration: (Int => Unit) = null, maxIterations: Int = 1000): Unit = {
+    var it = 0
+    do {
+      step()
+      
+      if (onIteration != null)
+        onIteration(it)
+      it += 1
+    } while (totalKinematicEnergy > 0.001f && it < maxIterations)
+      
+    if (onComplete != null)
+      onComplete(it)
+  }
 }
-
-case class ThisDirectedGraph(sourceNodes: Seq[Node], sourceEdges: Seq[Edge]) extends DirectedGraph[Node, Edge] {
-  def numVertices = sourceNodes.size
-  def numEdges = sourceEdges.size
-  def vertex(v: VIndex) = sourceNodes(v)
-  def edge(e: EIndex) = sourceEdges(e)
-  val nodeToIndex: Map[Node, VIndex] = sourceNodes.view.zipWithIndex.toMap
-  val edgeToIndex: Map[Edge, EIndex] = sourceEdges.view.zipWithIndex.toMap
-  val edgeHeadSeq: Seq[VIndex] = sourceEdges.map(edge => nodeToIndex(edge.to))
-  val edgeTailSeq: Seq[VIndex] = sourceEdges.map(edge => nodeToIndex(edge.from))
-  def head(e: EIndex) = edgeHeadSeq(e)
-  def tail(e: EIndex) = edgeTailSeq(e)
-  val inEdgesSeq: Seq[Set[EIndex]] =
-    (0 until numVertices).map(v => (0 until numEdges).filter(e => head(e) == v).toSet)
-  val outEdgesSeq: Seq[Set[EIndex]] =
-    (0 until numVertices).map(v => (0 until numEdges).filter(e => tail(e) == v).toSet)
-  def inEdges(v: VIndex) = inEdgesSeq(v)
-  def outEdges(v: VIndex) = outEdgesSeq(v)
-  def mass(v: VIndex): Float = sourceNodes(v).mass * (1 + edges(v).size / 3)
-  def weight(e: EIndex): Float = sourceEdges(e).weight
-}
-
 
 /**
  * A force directed graph layout implementation. Parts of this code are ported from the Springy
@@ -56,7 +35,7 @@ case class ThisDirectedGraph(sourceNodes: Seq[Node], sourceEdges: Seq[Edge]) ext
  * Andrei Kashcha. 
  * @author Rainer Simon <rainer.simon@ait.ac.at>
  */
-class SpringGraph(val graph: DirectedGraph[Node, Edge]) {
+class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
     
   /** Repulsion constant **/
   private var REPULSION = -1.2f
@@ -89,6 +68,8 @@ class SpringGraph(val graph: DirectedGraph[Node, Edge]) {
   val frcX: Array[Float] = new Array[Float](graph.numVertices)
   val frcY: Array[Float] = new Array[Float](graph.numVertices)
 
+  def vertexPosition(v: VIndex): Float2D = pos(v)
+
   object pos {
     def apply(v: Int): Float2D = Float2D(posX(v), posY(v))
     def update(v: Int, vec: Float2D): Unit = {
@@ -115,26 +96,6 @@ class SpringGraph(val graph: DirectedGraph[Node, Edge]) {
     pos(v) = Float2D.random(1.0f)
     vel(v) = Float2D(0, 0)
     frc(v) = Float2D(0, 0)
-  }
-
-  def state(v: Int) = NodeState(v)
-
-  case class NodeState(i: Int) {
-    def pos: Float2D = Float2D(posX(i), posY(i))
-    def pos_=(newPos: Float2D) = {
-      posX(i) = newPos.x
-      posY(i) = newPos.y
-    }
-    def velocity: Float2D = Float2D(velX(i), velY(i))
-    def velocity_=(newVel: Float2D) = {
-      velX(i) = newVel.x
-      velY(i) = newVel.y
-    }
-    def force: Float2D = Float2D(frcX(i), frcY(i))
-    def force_=(newFrc: Float2D) = {
-      frcX(i) = newFrc.x
-      frcY(i) = newFrc.y
-    }
   }
 
   private def buildGraph(): Unit =
@@ -262,19 +223,5 @@ class SpringGraph(val graph: DirectedGraph[Node, Edge]) {
       }
     }
     nearest
-  }
-
-  def doLayout(onComplete: (Int => Unit) = null, onIteration: (Int => Unit) = null, maxIterations: Int = 1000): Unit = {
-    var it = 0
-    do { 
-      step()
-      
-      if (onIteration != null)
-        onIteration(it)
-      it += 1
-    } while (totalKinematicEnergy > 0.001f && it < maxIterations)
-      
-    if (onComplete != null)
-      onComplete(it)
   }
 }

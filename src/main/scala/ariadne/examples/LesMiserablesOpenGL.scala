@@ -1,4 +1,4 @@
-package at.ait.dme.forcelayout.examples
+package com.faacets.ariadne
 
 import rapture.io._
 import scala.io.Source
@@ -6,8 +6,7 @@ import scala.io.Source
 import java.awt.Dimension
 import javax.swing.JFrame
 
-import at.ait.dme.forcelayout.{ Edge, Node, SpringGraph, ThisDirectedGraph }
-import at.ait.dme.forcelayout.renderer.OpenGLInteractiveGraphRenderer
+import renderer._
 
 object LesMiserablesOpenGL extends App {
   
@@ -24,9 +23,11 @@ object LesMiserablesOpenGL extends App {
     Edge(nodes(json.source.get[Int]), nodes(json.target.get[Int]), value.toFloat)
   })
     
-  val graph = new SpringGraph(ThisDirectedGraph(nodes, edges))
-  
-  val vis = new OpenGLInteractiveGraphRenderer(graph)
+  val graph = ThisDirectedGraph(nodes, edges)
+
+  val layout = new SpringLayout(graph)
+
+  val vis = new OpenGLInteractiveGraphRenderer(layout)
   
   val frame = new JFrame("Les Miserables")
   frame.setPreferredSize(new Dimension(920,720))

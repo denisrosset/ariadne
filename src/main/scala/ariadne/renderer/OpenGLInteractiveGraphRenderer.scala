@@ -1,11 +1,11 @@
-package at.ait.dme.forcelayout.renderer
+package com.faacets.ariadne
+package renderer
 
 import java.awt.{ Canvas, Graphics2D, Point, RenderingHints }
-import at.ait.dme.forcelayout.{ Node, SpringGraph }
 import java.awt.image.BufferStrategy
 import java.awt.event.{ MouseAdapter, MouseEvent, MouseWheelListener, MouseWheelEvent }
 
-class OpenGLInteractiveGraphRenderer(graph: SpringGraph) extends Canvas with GraphRenderer {
+class OpenGLInteractiveGraphRenderer(val gLayout: SpringLayout) extends Canvas with GraphRenderer {
   
   System.setProperty("sun.java2d.opengl", "True")
   System.setProperty("sun.java2d.ddscale", "True")
@@ -32,8 +32,8 @@ class OpenGLInteractiveGraphRenderer(graph: SpringGraph) extends Canvas with Gra
   addMouseListener(new MouseAdapter() {
     override def mouseClicked(e: MouseEvent) {
       val size = getSize()
-      val coords = toGraphCoords(graph, e.getPoint, size.getWidth.toInt, size.getHeight.toInt, currentXOffset, currentYOffset, currentZoom)
-      selectedNode = Some(graph.getNearestNode(coords))
+      val coords = toGraphCoords(gLayout, e.getPoint, size.getWidth.toInt, size.getHeight.toInt, currentXOffset, currentYOffset, currentZoom)
+      selectedNode = Some(gLayout.getNearestNode(coords))
       doPaint(strategy)
     }
     
@@ -55,7 +55,7 @@ class OpenGLInteractiveGraphRenderer(graph: SpringGraph) extends Canvas with Gra
   def start = {
     createBufferStrategy(2)
     strategy = getBufferStrategy
-    graph.doLayout(onComplete = (it => { println("completed in " + it + " iterations"); doPaint(strategy) }),
+    gLayout.doLayout(onComplete = (it => { println("completed in " + it + " iterations"); doPaint(strategy) }),
                    onIteration = (it => doPaint(strategy))) 
   }
 
@@ -69,7 +69,7 @@ class OpenGLInteractiveGraphRenderer(graph: SpringGraph) extends Canvas with Gra
         RenderingHints.VALUE_FRACTIONALMETRICS_ON)
     
     val bounds = getSize
-    render(g2d, graph, bounds.getWidth.toInt, bounds.getHeight.toInt, selectedNode, currentXOffset, currentYOffset, currentZoom)
+    render(g2d, gLayout, bounds.getWidth.toInt, bounds.getHeight.toInt, selectedNode, currentXOffset, currentYOffset, currentZoom)
     g2d.dispose
     strategy.show
   }

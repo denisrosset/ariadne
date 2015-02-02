@@ -1,8 +1,8 @@
-package at.ait.dme.forcelayout.renderer
+package com.faacets.ariadne
+package renderer
 
 import java.awt._
 import java.awt.geom.Ellipse2D
-import at.ait.dme.forcelayout.{ Node, Edge, SpringGraph, Float2D, Int2D }
 
 class Node2D(val pos: Int2D, val node: Node) {
   def this(x: Int, y: Int, node: Node) =
@@ -14,6 +14,8 @@ class Node2D(val pos: Int2D, val node: Node) {
 class Edge2D(val from: Node2D, val to: Node2D, val edge: Edge)
 
 private[renderer] trait GraphRenderer {
+  def gLayout: SpringLayout
+  def graph: DirectedGraph[Node, Edge] = gLayout.graph
 
   private var lastCompletion: Long = System.currentTimeMillis
   
@@ -41,7 +43,7 @@ private[renderer] trait GraphRenderer {
   def setEdgePainter(painter: (Seq[Edge2D], Graphics2D) => Unit) =
     edgePainter = painter
     
-  def render(g2d: Graphics2D, graph: SpringGraph, width: Int, height: Int, selectedNode: Option[Int] = None, offsetX: Float = 0.0f, offsetY: Float = 0.0f, zoom: Float = 1.0f, showLabels: Boolean = false): Unit = {
+  def render(g2d: Graphics2D, graph: SpringLayout, width: Int, height: Int, selectedNode: Option[Int] = None, offsetX: Float = 0.0f, offsetY: Float = 0.0f, zoom: Float = 1.0f, showLabels: Boolean = false): Unit = {
     g2d.setColor(Color.WHITE)
     g2d.fillRect(0, 0, width, height)
 
@@ -120,12 +122,12 @@ private[renderer] trait GraphRenderer {
     lastCompletion = System.currentTimeMillis
   }
   
-  private def computeScale(graph: SpringGraph, width: Int, height: Int) = {
+  private def computeScale(graph: SpringLayout, width: Int, height: Int) = {
     val bounds = graph.bounds
     Math.min(width / 2 * 0.9 / Math.max(bounds.maxX, Math.abs(bounds.minX)), height / 2 * 0.9 / Math.max(bounds.maxY, Math.abs(bounds.minY)))    
   }
         
-  def toGraphCoords(graph: SpringGraph, pt: Point, width: Int, height: Int, offsetX: Float = 0.0f, offsetY: Float = 0.0f, zoom: Float = 1.0f): Float2D = {
+  def toGraphCoords(graph: SpringLayout, pt: Point, width: Int, height: Int, offsetX: Float = 0.0f, offsetY: Float = 0.0f, zoom: Float = 1.0f): Float2D = {
     val c = computeScale(graph, width, height)
     val gx = (pt.x - width / 2 - offsetX) / (c * zoom)
     val gy = (pt.y - height / 2 - offsetY) / (c * zoom) 

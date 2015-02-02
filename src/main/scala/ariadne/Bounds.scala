@@ -1,4 +1,4 @@
-package at.ait.dme.forcelayout
+package com.faacets.ariadne
 
 /**
  * 2D bounds, plus some convenience methods.
