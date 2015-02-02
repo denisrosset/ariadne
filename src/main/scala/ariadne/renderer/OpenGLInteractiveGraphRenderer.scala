@@ -32,8 +32,8 @@ class OpenGLInteractiveGraphRenderer(val gLayout: SpringLayout) extends Canvas w
   addMouseListener(new MouseAdapter() {
     override def mouseClicked(e: MouseEvent) {
       val size = getSize()
-      val viewpoint = Viewpoint(Int2D(size.getWidth.toInt, size.getHeight.toInt), Float2D(currentXOffset, currentYOffset), currentZoom)
-      val coords = viewpoint.toGraphCoords(gLayout, e.getPoint)
+      val viewpoint = Viewpoint(gLayout.bounds, Int2D(size.getWidth.toInt, size.getHeight.toInt), Float2D(currentXOffset, currentYOffset), currentZoom)
+      val coords = viewpoint.toGraphCoords(e.getPoint)
       selectedNode = Some(gLayout.getNearestNode(coords))
       doPaint(strategy)
     }
@@ -71,7 +71,7 @@ class OpenGLInteractiveGraphRenderer(val gLayout: SpringLayout) extends Canvas w
     
     val bounds = getSize
     val bnds = Int2D(bounds.getWidth.toInt, bounds.getHeight.toInt)
-    val viewpoint = Viewpoint(bnds, Float2D(currentXOffset, currentYOffset), currentZoom)
+    val viewpoint = Viewpoint(gLayout.bounds, bnds, Float2D(currentXOffset, currentYOffset), currentZoom)
     render(g2d, gLayout, selectedNode, viewpoint)
     g2d.dispose
     strategy.show

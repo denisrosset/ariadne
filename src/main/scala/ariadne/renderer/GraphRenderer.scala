@@ -13,21 +13,21 @@ class Node2D(val pos: Int2D, val node: Node) {
 
 class Edge2D(val from: Node2D, val to: Node2D, val edge: Edge)
 
-case class Viewpoint(canvasSize: Int2D,
+case class Viewpoint(layoutBounds: Bounds, canvasSize: Int2D,
   offset: Float2D = Float2D.zero, zoom: Float = 1.0f) {
   def canvasWidth = canvasSize.x
   def canvasHeight = canvasSize.y
   def offsetX: Float = offset.x
   def offsetY: Float = offset.y
-  def computeScale(layout: SpringLayout): Float = {
-    val bounds = layout.bounds
-    Math.min(canvasWidth / 2 * 0.9 / Math.max(bounds.maxX, Math.abs(bounds.minX)), canvasHeight / 2 * 0.9 / Math.max(bounds.maxY, Math.abs(bounds.minY))).toFloat
-  }
-  def toGraphCoords(layout: SpringLayout, pt: Point): Float2D = {
-    val c = computeScale(layout)
-    val ptp = Int2D(pt.x, pt.y)
-    (ptp.toFloat - (canvasSize.toFloat :/ 2.0f) - offset) :/ (c * zoom)
-  }
+  val scale: Float =
+    Math.min(
+      canvasWidth / 2 * 0.9 / Math.max(layoutBounds.maxX, Math.abs(layoutBounds.minX)),
+      canvasHeight / 2 * 0.9 / Math.max(layoutBounds.maxY, Math.abs(layoutBounds.minY))).toFloat
+  val c: Float = scale * zoom
+  val d: Float2D = (canvasSize.toFloat :/ 2.0f) + offset
+  def toGraphCoords(pt: Point): Float2D =
+    (Float2D(pt.x, pt.y) - (canvasSize.toFloat :/ 2.0f) - offset) :/ c
+  def toCanvasCoords(pos: Float2D): Int2D = ((pos :* c) + d).toInt
 
 }
 
@@ -36,7 +36,7 @@ private[renderer] trait GraphRenderer {
   def graph: DirectedGraph[Node, Edge] = gLayout.graph
 
   private var lastCompletion: Long = System.currentTimeMillis
-  
+
   private var nodePainter = (nodes: Seq[Node2D], g2d: Graphics2D) => {
     nodes.foreach(n2d => {
       val (x, y, n) = (n2d.x, n2d.y, n2d.node)
@@ -61,30 +61,28 @@ private[renderer] trait GraphRenderer {
   def setEdgePainter(painter: (Seq[Edge2D], Graphics2D) => Unit) =
     edgePainter = painter
 
-  def render(g2d: Graphics2D, graph: SpringLayout, selectedNode: Option[Int] = None, viewpoint: Viewpoint, showLabels: Boolean = false): Unit = {
-    import viewpoint.{canvasWidth, canvasHeight, offsetX, offsetY, zoom}
+  def render(g2d: Graphics2D, layout: SpringLayout, selectedNode: Option[Int] = None, viewpoint: Viewpoint, showLabels: Boolean = false): Unit = {
+    val graph = layout.graph
+    import viewpoint.{canvasWidth, canvasHeight, offsetX, offsetY, zoom, c, d}
     g2d.setColor(Color.WHITE)
     g2d.fillRect(0, 0, canvasWidth, canvasHeight)
 
-    val c = viewpoint.computeScale(graph) * zoom
-    val d = Float2D(canvasWidth / 2 + offsetX, canvasHeight / 2 + offsetY)
-    
-    val edges2D = (0 until graph.graph.numEdges).map(e => {
-      val edge = graph.graph.edge(e)
-      val fromI = graph.graph.tail(e)
-      val toI = graph.graph.head(e)
-      val fromV = graph.graph.vertex(fromI)
-      val toV = graph.graph.vertex(toI)
+    val edges2D = (0 until graph.numEdges).map(e => {
+      val edge = graph.edge(e)
+      val fromI = graph.tail(e)
+      val toI = graph.head(e)
+      val fromV = graph.vertex(fromI)
+      val toV = graph.vertex(toI)
 
-      val from = new Node2D(((graph.pos(fromI) :* c) + d).toInt, fromV)
-      val to = new Node2D(((graph.pos(toI) :* c) + d).toInt, toV)
+      val from = new Node2D(((layout.pos(fromI) :* c) + d).toInt, fromV)
+      val to = new Node2D(((layout.pos(toI) :* c) + d).toInt, toV)
       new Edge2D(from, to, edge)
     })
     edgePainter(edges2D, g2d)
     
-    val nodes2D = (0 until graph.graph.numVertices).map { v =>
-      val n = graph.graph.vertex(v)
-      new Node2D(((graph.pos(v) :* c) + d).toInt, n)
+    val nodes2D = (0 until graph.numVertices).map { v =>
+      val n = graph.vertex(v)
+      new Node2D(((layout.pos(v) :* c) + d).toInt, n)
     }
       .filter(n2d => n2d.x > 0 && n2d.y > 0)
       .filter(n2d => n2d.x <= canvasWidth && n2d.y <= canvasHeight)
@@ -97,17 +95,17 @@ private[renderer] trait GraphRenderer {
     }  
 
     selectedNode.foreach { v =>
-      val size = Math.log(graph.graph.mass(v)) + 7 // TODO: display using original mass
-      val p = (graph.pos(v) :* c) + d
-      val n = graph.graph.vertex(v)
+      val size = Math.log(graph.mass(v)) + 7 // TODO: display using original mass
+      val p = (layout.pos(v) :* c) + d
+      val n = graph.vertex(v)
 
       // Highlight in-links
-      graph.graph.inEdges(v).foreach { e =>
-        val fromI = graph.graph.tail(e)
-        val fromN = graph.graph.vertex(fromI)
-        val from = (graph.pos(fromI) :* c.toFloat) + d
-        val width = Math.min(4, Math.max(2, Math.min(8, graph.graph.weight(e))).toInt / 2)
-        val edge = graph.graph.edge(e)
+      graph.inEdges(v).foreach { e =>
+        val fromI = graph.tail(e)
+        val fromN = graph.vertex(fromI)
+        val from = (layout.pos(fromI) :* c.toFloat) + d
+        val width = Math.min(4, Math.max(2, Math.min(8, graph.weight(e))).toInt / 2)
+        val edge = graph.edge(e)
         g2d.setStroke(new BasicStroke(width));
         g2d.setColor(Color.GREEN)
         g2d.drawLine(from.x.toInt, from.y.toInt, p.x.toInt, p.y.toInt)
@@ -116,11 +114,11 @@ private[renderer] trait GraphRenderer {
       }
 
       // Highlight out-links
-      graph.graph.outEdges(v).foreach { e =>
-        val toI = graph.graph.head(e)
-        val toN = graph.graph.vertex(toI)
-        val to = (graph.pos(toI) :* c.toFloat) + d
-        val width = Math.min(4, Math.max(2, Math.min(8, graph.graph.weight(e))).toInt / 2)
+      graph.outEdges(v).foreach { e =>
+        val toI = graph.head(e)
+        val toN = graph.vertex(toI)
+        val to = (layout.pos(toI) :* c.toFloat) + d
+        val width = Math.min(4, Math.max(2, Math.min(8, graph.weight(e))).toInt / 2)
     
         g2d.setStroke(new BasicStroke(width));
         g2d.setColor(Color.RED)
