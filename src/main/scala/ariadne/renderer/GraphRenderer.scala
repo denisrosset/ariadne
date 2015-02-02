@@ -13,19 +13,20 @@ class Node2D(val pos: Int2D, val node: Node) {
 
 class Edge2D(val from: Node2D, val to: Node2D, val edge: Edge)
 
-case class Viewpoint(size: Int2D, offset: Float2D = Float2D.zero, zoom: Float = 1.0f) {
-  def width = size.x
-  def height = size.y
+case class Viewpoint(canvasSize: Int2D,
+  offset: Float2D = Float2D.zero, zoom: Float = 1.0f) {
+  def canvasWidth = canvasSize.x
+  def canvasHeight = canvasSize.y
   def offsetX: Float = offset.x
   def offsetY: Float = offset.y
   def computeScale(layout: SpringLayout): Float = {
     val bounds = layout.bounds
-    Math.min(width / 2 * 0.9 / Math.max(bounds.maxX, Math.abs(bounds.minX)), height / 2 * 0.9 / Math.max(bounds.maxY, Math.abs(bounds.minY))).toFloat
+    Math.min(canvasWidth / 2 * 0.9 / Math.max(bounds.maxX, Math.abs(bounds.minX)), canvasHeight / 2 * 0.9 / Math.max(bounds.maxY, Math.abs(bounds.minY))).toFloat
   }
   def toGraphCoords(layout: SpringLayout, pt: Point): Float2D = {
     val c = computeScale(layout)
     val ptp = Int2D(pt.x, pt.y)
-    (ptp.toFloat - (size.toFloat :/ 2.0f) - offset) :/ (c * zoom)
+    (ptp.toFloat - (canvasSize.toFloat :/ 2.0f) - offset) :/ (c * zoom)
   }
 
 }
@@ -61,12 +62,12 @@ private[renderer] trait GraphRenderer {
     edgePainter = painter
 
   def render(g2d: Graphics2D, graph: SpringLayout, selectedNode: Option[Int] = None, viewpoint: Viewpoint, showLabels: Boolean = false): Unit = {
-    import viewpoint.{width, height, offsetX, offsetY, zoom}
+    import viewpoint.{canvasWidth, canvasHeight, offsetX, offsetY, zoom}
     g2d.setColor(Color.WHITE)
-    g2d.fillRect(0, 0, width, height)
+    g2d.fillRect(0, 0, canvasWidth, canvasHeight)
 
-    val c = computeScale(graph, width, height) * zoom
-    val d = Float2D(width / 2 + offsetX, height / 2 + offsetY)
+    val c = viewpoint.computeScale(graph) * zoom
+    val d = Float2D(canvasWidth / 2 + offsetX, canvasHeight / 2 + offsetY)
     
     val edges2D = (0 until graph.graph.numEdges).map(e => {
       val edge = graph.graph.edge(e)
@@ -86,7 +87,7 @@ private[renderer] trait GraphRenderer {
       new Node2D(((graph.pos(v) :* c) + d).toInt, n)
     }
       .filter(n2d => n2d.x > 0 && n2d.y > 0)
-      .filter(n2d => n2d.x <= width && n2d.y <= height)
+      .filter(n2d => n2d.x <= canvasWidth && n2d.y <= canvasHeight)
 
     nodePainter(nodes2D, g2d)
     
@@ -137,18 +138,6 @@ private[renderer] trait GraphRenderer {
     g2d.drawString("%.1f".format(1000.0 / (System.currentTimeMillis - lastCompletion)) + "FPS", 2, 12)
     
     lastCompletion = System.currentTimeMillis
-  }
-
-  private def computeScale(graph: SpringLayout, width: Int, height: Int): Float = {
-    val bounds = graph.bounds
-    Math.min(width / 2 * 0.9 / Math.max(bounds.maxX, Math.abs(bounds.minX)), height / 2 * 0.9 / Math.max(bounds.maxY, Math.abs(bounds.minY))).toFloat
-  }
-
-  def toGraphCoords(graph: SpringLayout, pt: Point, width: Int, height: Int, offsetX: Float = 0.0f, offsetY: Float = 0.0f, zoom: Float = 1.0f): Float2D = {
-    val c = computeScale(graph, width, height)
-    val gx = (pt.x - width / 2 - offsetX) / (c * zoom)
-    val gy = (pt.y - height / 2 - offsetY) / (c * zoom) 
-    Float2D(gx, gy)
   }
   
 }
