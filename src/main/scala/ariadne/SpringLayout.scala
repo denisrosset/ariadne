@@ -72,6 +72,9 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
     def minY: Float
     def maxX: Float
     def maxY: Float
+    def comX: Float // center of "mass"
+    def comY: Float
+    def com: Float2D = Float2D(comX, comY)
     def width = maxX - minX
     def height = maxY - minY
     // TODO: compute the real center of mass
@@ -81,6 +84,11 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
 
   sealed trait QuadTreeBuilder extends QuadTree { self =>
     def withPoint(v: VIndex): QuadBranchBuilder
+    def computeCom(): Unit
+    def result(): QuadTree = {
+      computeCom()
+      this
+    }
   }
 
   sealed trait QuadBranch {
@@ -101,6 +109,8 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
     val maxX: Float,
     val maxY: Float,
     var bodies: Int = 0,
+    var comX: Float = 0.0f,
+    var comY: Float = 0.0f,
     var tl: Opt[QuadTreeBuilder] = Opt.empty[QuadTreeBuilder],
     var tr: Opt[QuadTreeBuilder] = Opt.empty[QuadTreeBuilder],
     var bl: Opt[QuadTreeBuilder] = Opt.empty[QuadTreeBuilder],
@@ -116,16 +126,40 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
       val verY = posY(w)
       if (verY < midY) { // top
         if (verX < midX) // left
-          tl = Opt(tl.fold(new QuadLeafBuilder(minX, minY, midX, midY, w): QuadTreeBuilder)(_.withPoint(w)))
-        else // right
-          tr = Opt(tr.fold(new QuadLeafBuilder(midX, minY, maxX, midY, w): QuadTreeBuilder)(_.withPoint(w)))
+          tl = Opt(tl match {
+            case Opt(q) => q.withPoint(w)
+            case _ => new QuadLeafBuilder(minX, minY, midX, midY, w)
+          })
+          else // right
+            tr = Opt(tr match {
+              case Opt(q) => q.withPoint(w)
+              case _ => new QuadLeafBuilder(midX, minY, maxX, midY, w)
+            })
       } else { // bottom
         if (verX < midX) // left
-          bl = Opt(bl.fold(new QuadLeafBuilder(minX, midY, midX, maxY, w): QuadTreeBuilder)(_.withPoint(w)))
-        else
-          br = Opt(br.fold(new QuadLeafBuilder(midX, midY, maxX, maxY, w): QuadTreeBuilder)(_.withPoint(w)))
+          bl = Opt(bl match {
+            case Opt(q) => q.withPoint(w)
+            case _ => new QuadLeafBuilder(minX, midY, midX, maxY, w)
+          })
+          else
+            br = Opt(br match {
+              case Opt(q) => q.withPoint(w)
+              case _ => new QuadLeafBuilder(midX, midY, maxX, maxY, w)
+            })
       }
       this
+    }
+    def computeCom(): Unit = {
+      def getWeighted(qOpt: Opt[QuadTreeBuilder]): Float2D = qOpt match {
+        case Opt(q) =>
+          q.computeCom()
+          Float2D(q.comX, q.comY) :* q.bodies
+        case _ => Float2D.zero
+      }
+      val weighted = getWeighted(tl) + getWeighted(tr) + getWeighted(bl) + getWeighted(br)
+      val com = weighted :/ bodies
+      comX = com.x
+      comY = com.y
     }
   }
 
@@ -135,6 +169,8 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
     var maxX: Float,
     var maxY: Float,
     var v: VIndex) extends QuadLeaf with QuadTreeBuilder {
+    def comX = posX(v)
+    def comY = posY(v)
     require(minX < maxX)
     require(minY < maxY)
     def midX: Float = (minX + maxX) / 2
@@ -166,6 +202,7 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
     }
 
     def withPoint(w: VIndex): QuadBranchBuilder = subdivided.withPoint(w)
+    def computeCom(): Unit = { } // do nothing
   }
 
 
@@ -207,7 +244,7 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
     cforRange(0 until graph.numVertices) { v =>
       newQuad = newQuad.withPoint(v)
     }
-    newQT = newQuad
+    newQT = newQuad.result()
   }
 
   def initVec(v: Int): Unit = {
@@ -258,7 +295,7 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
           if (qb.bl.nonEmpty) apply(v, qb.bl.get)
           if (qb.br.nonEmpty) apply(v, qb.br.get)
         case qb: QuadBranch => // far-away quad
-          val d = qb.center - pos(v)
+          val d = qb.com - pos(v)
           val distance = d.magnitude
           val direction = d.normalize
           frc(v) += direction :* (REPULSION * quad.bodies / (distance * distance * 0.5f))
