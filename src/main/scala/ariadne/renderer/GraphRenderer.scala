@@ -47,10 +47,11 @@ private[renderer] trait GraphRenderer {
     g2d.fill(new Ellipse2D.Double(canvasPos.x - size / 2, canvasPos.y - size / 2, size, size))
   }
 
+  val edgeColor = new Color(198, 198, 198, 198)
   def paintEdge(g2d: Graphics2D, viewpoint: Viewpoint, e: EIndex): Unit = {
     val width = Math.min(4, Math.max(2, Math.min(8, graph.weight(e))).toInt / 2)
     g2d.setStroke(new BasicStroke(width));
-    g2d.setColor(new Color(198, 198, 198, 198))
+    g2d.setColor(edgeColor)
     val t = graph.tail(e)
     val h = graph.head(e)
     val tPos = viewpoint.toCanvasCoords(gLayout.pos(t))
@@ -58,31 +59,6 @@ private[renderer] trait GraphRenderer {
     g2d.drawLine(tPos.x, tPos.y, hPos.x, hPos.y)
   }
 
-  /*
-  private var nodePainter = (nodes: Seq[Node2D], g2d: Graphics2D) => {
-    nodes.foreach(n2d => {
-      val (x, y, n) = (n2d.x, n2d.y, n2d.node)
-      val size = Math.max(6, Math.min(30, Math.log(n.mass) + 1))
-      g2d.setColor(ColorPalette.getColor(n.group))
-      g2d.fill(new Ellipse2D.Double(x - size / 2, y - size / 2, size, size))
-    })
-  }
-  
-  def setNodePainter(painter: (Seq[Node2D], Graphics2D) => Unit) =
-    nodePainter = painter
-  
-  private var edgePainter = (edges: Seq[Edge2D], g2d: Graphics2D) => {
-    edges.foreach(e2d => {
-      val width = Math.min(4, Math.max(2, Math.min(8, e2d.edge.weight)).toInt / 2)   
-      g2d.setStroke(new BasicStroke(width));
-      g2d.setColor(new Color(198, 198, 198, 198))  
-      g2d.drawLine(e2d.from.x, e2d.from.y, e2d.to.x, e2d.to.y)
-    })
-  } 
-  
-  def setEdgePainter(painter: (Seq[Edge2D], Graphics2D) => Unit) =
-    edgePainter = painter
-   */
   def render(g2d: Graphics2D, layout: SpringLayout, selectedNode: Option[Int] = None, viewpoint: Viewpoint, showLabels: Boolean = false): Unit = {
     val graph = layout.graph
     import viewpoint.{canvasWidth, canvasHeight, offsetX, offsetY, zoom, c, d}
@@ -91,19 +67,6 @@ private[renderer] trait GraphRenderer {
 
     cforRange(0 until graph.numEdges)(e => paintEdge(g2d, viewpoint, e))
     cforRange(0 until graph.numVertices)(v => paintVertex(g2d, viewpoint, v))
-
-    /*
-    val nodes2D = (0 until graph.numVertices).map { v =>
-      val n = graph.vertex(v)
-      new Node2D(((layout.pos(v) :* c) + d).toInt, n)
-    }
-      .filter(n2d => n2d.x > 0 && n2d.y > 0)
-      .filter(n2d => n2d.x <= canvasWidth && n2d.y <= canvasHeight)
-
-    if (showLabels) {
-      g2d.setColor(Color.BLACK)
-      nodes2D.foreach(n2d => g2d.drawString(n2d.node.label, n2d.x + 5, n2d.y - 2))
-    }  */
 
     selectedNode.foreach { v =>
       val size = Math.log(graph.mass(v)) + 7 // TODO: display using original mass
