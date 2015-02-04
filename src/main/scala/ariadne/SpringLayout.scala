@@ -6,8 +6,6 @@ import scala.collection.{immutable, mutable}
 import spire.syntax.cfor._
 import spire.util.Opt
 
-import quadtree._
-
 trait Layout {
   def graph: DirectedGraph[Node, Edge]
   def vertexPosition(v: VIndex): Float2D
@@ -243,41 +241,9 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
     }
 
   def computeBarnesHut(): Unit = {
-    val bodies = (0 until graph.numVertices).map(v => Body(pos(v), v))
+    cforRange(0 until graph.numVertices)( v => apply(v, newQT) )
 
-    val qt = new quadtree.QuadTree(getBounds, bodies)
-//    cforRange(0 until graph.numVertices)( v => applyOld(v, qt.root) )
-    cforRange(0 until graph.numVertices)( v => applyNew(v, newQT) )
-
-    def applyOld(v: Int, quad: Quad): Unit = {
-      val s = (quad.bounds.width + quad.bounds.height) / 2
-      val d = (quad.center - pos(v)).magnitude
-      if (s/d > THETA) {
-        // Nearby quad
-        quad.children match {
-          case Opt(seq) =>
-            cforRange(0 until seq.size)( i => applyOld(v, seq(i)) )
-          case _ => quad.body match {
-            case Opt(b) =>
-              val d = b.pos - pos(v)
-              val distance = d.magnitude
-              val direction = d.normalize
-
-              if (b.index != v)
-                frc(v) += direction :* (REPULSION / (distance * distance * 0.5f))
-            case _ =>
-          }
-        }
-      } else {
-        // Far-away quad
-        val d = quad.center - pos(v)
-        val distance = d.magnitude
-        val direction = d.normalize
-        frc(v) += direction :* (REPULSION * quad.bodies / (distance * distance * 0.5f))
-      }
-    }
-
-    def applyNew(v: Int, quad: QuadTree): Unit = {
+    def apply(v: Int, quad: QuadTree): Unit = {
       val s = (quad.width + quad.height) / 2
       val d = (quad.center - pos(v)).magnitude
       quad match {
@@ -287,10 +253,10 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
           val direction = d.normalize
           frc(v) += direction :* (REPULSION / (distance * distance * 0.5f))
         case qb: QuadBranch if s/d > THETA => // nearby quad
-          if (qb.tl.nonEmpty) applyNew(v, qb.tl.get)
-          if (qb.tr.nonEmpty) applyNew(v, qb.tr.get)
-          if (qb.bl.nonEmpty) applyNew(v, qb.bl.get)
-          if (qb.br.nonEmpty) applyNew(v, qb.br.get)
+          if (qb.tl.nonEmpty) apply(v, qb.tl.get)
+          if (qb.tr.nonEmpty) apply(v, qb.tr.get)
+          if (qb.bl.nonEmpty) apply(v, qb.bl.get)
+          if (qb.br.nonEmpty) apply(v, qb.br.get)
         case qb: QuadBranch => // far-away quad
           val d = qb.center - pos(v)
           val distance = d.magnitude
