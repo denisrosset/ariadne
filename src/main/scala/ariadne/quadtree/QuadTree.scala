@@ -56,9 +56,16 @@ object QuadTree {
   def clipBodies(bodies: Seq[Body], bounds: Bounds) = bodies.filter(b => bounds.contains(b.pos))
   
   def computeCenter[T](bodies: Seq[Body]) = {
-    val x = bodies.map(_.pos.x).fold(0.0f)(_ + _) / bodies.size
-    val y = bodies.map(_.pos.y).fold(0.0f)(_ + _) / bodies.size
-    Float2D(x,y)
+    var x = 0.0f
+    var y = 0.0f
+    val it = bodies.iterator
+    while(it.hasNext) {
+      val body = it.next
+      x += body.pos.x
+      y += body.pos.y
+    }
+    val n = bodies.size
+    Float2D(x/n,y/n)
   }
   
 }

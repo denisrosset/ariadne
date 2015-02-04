@@ -1,6 +1,7 @@
 package com.faacets.ariadne
 
-import scala.collection.parallel.ParSeq
+import scala.collection
+import scala.collection.{immutable, mutable}
 
 import spire.syntax.cfor._
 import spire.util.Opt
@@ -68,6 +69,110 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
   val frcX: Array[Float] = new Array[Float](graph.numVertices)
   val frcY: Array[Float] = new Array[Float](graph.numVertices)
 
+  sealed trait QuadTree {
+    def minX: Float
+    def minY: Float
+    def maxX: Float
+    def maxY: Float
+    def width = maxX - minX
+    def height = maxY - minY
+    // TODO: compute the real center of mass
+    def center = Float2D((minX + maxX) / 2, (minY + maxY) / 2)
+    def bodies: Int
+  }
+
+  sealed trait QuadTreeBuilder extends QuadTree { self =>
+    def withPoint(v: VIndex): QuadBranchBuilder
+  }
+
+  sealed trait QuadBranch {
+    def tl: Opt[QuadTree] // top left
+    def tr: Opt[QuadTree] // top right
+    def bl: Opt[QuadTree] // bottom left
+    def br: Opt[QuadTree] // bottom right
+  }
+
+  sealed trait QuadLeaf extends QuadTree {
+    def v: VIndex
+    def bodies = 1
+  }
+
+  final class QuadBranchBuilder(
+    val minX: Float,
+    val minY: Float,
+    val maxX: Float,
+    val maxY: Float,
+    var bodies: Int = 0,
+    var tl: Opt[QuadTreeBuilder] = Opt.empty[QuadTreeBuilder],
+    var tr: Opt[QuadTreeBuilder] = Opt.empty[QuadTreeBuilder],
+    var bl: Opt[QuadTreeBuilder] = Opt.empty[QuadTreeBuilder],
+    var br: Opt[QuadTreeBuilder] = Opt.empty[QuadTreeBuilder]
+  ) extends QuadBranch with QuadTreeBuilder {
+    require(minX < maxX)
+    require(minY < maxY)
+    val midX = (minX + maxX) / 2
+    val midY = (minY + maxY) / 2
+    def withPoint(w: VIndex): QuadBranchBuilder = {
+      bodies += 1
+      val verX = posX(w)
+      val verY = posY(w)
+      if (verY < midY) { // top
+        if (verX < midX) // left
+          tl = Opt(tl.fold(new QuadLeafBuilder(minX, minY, midX, midY, w): QuadTreeBuilder)(_.withPoint(w)))
+        else // right
+          tr = Opt(tr.fold(new QuadLeafBuilder(midX, minY, maxX, midY, w): QuadTreeBuilder)(_.withPoint(w)))
+      } else { // bottom
+        if (verX < midX) // left
+          bl = Opt(bl.fold(new QuadLeafBuilder(minX, midY, midX, maxY, w): QuadTreeBuilder)(_.withPoint(w)))
+        else
+          br = Opt(br.fold(new QuadLeafBuilder(midX, midY, maxX, maxY, w): QuadTreeBuilder)(_.withPoint(w)))
+      }
+      this
+    }
+  }
+
+  final class QuadLeafBuilder(
+    var minX: Float,
+    var minY: Float,
+    var maxX: Float,
+    var maxY: Float,
+    var v: VIndex) extends QuadLeaf with QuadTreeBuilder {
+    require(minX < maxX)
+    require(minY < maxY)
+    def midX: Float = (minX + maxX) / 2
+    def midY: Float = (minY + maxY) / 2
+    def subdivided: QuadBranchBuilder = {
+      val replacedBy = new QuadBranchBuilder(minX, minY, maxX, maxY, 1)
+      val verX = posX(v)
+      val verY = posY(v)
+      if (verY < midY) { // top
+        maxY = midY
+        if (verX < midX) { // left
+          maxX = midX
+          replacedBy.tl = Opt(this)
+        } else { // right
+          minX = midX
+          replacedBy.tr = Opt(this)
+        }
+      } else { // bottom
+        minY = midY
+        if (verX < midX) { // left
+          maxX = midX
+          replacedBy.bl = Opt(this)
+        } else { // right
+          minX = midX
+          replacedBy.br = Opt(this)
+        }
+      }
+      replacedBy
+    }
+
+    def withPoint(w: VIndex): QuadBranchBuilder = subdivided.withPoint(w)
+  }
+
+
+  def getBounds = Bounds(minX, minY, maxX, maxY)
+
   def vertexPosition(v: VIndex): Float2D = pos(v)
 
   object pos {
@@ -92,14 +197,31 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
     }
   }
 
+  var minX: Float = -1.0f
+  var minY: Float = -1.0f
+  var maxX: Float = 1.0f
+  var maxY: Float = 1.0f
+
+  var newQT: QuadTree = _
+
+  def updateQuadTree(): Unit = {
+    var newQuad: QuadTreeBuilder = new QuadBranchBuilder(minX, minY, maxX, maxY)
+    cforRange(0 until graph.numVertices) { v =>
+      newQuad = newQuad.withPoint(v)
+    }
+    newQT = newQuad
+  }
+
   def initVec(v: Int): Unit = {
     pos(v) = Float2D.random(1.0f)
     vel(v) = Float2D(0, 0)
     frc(v) = Float2D(0, 0)
   }
 
-  private def buildGraph(): Unit =
+  private def buildGraph(): Unit = {
     cforRange(0 until graph.numVertices)( i => initVec(i) )
+    updateQuadTree()
+  }
 
   buildGraph()
 
@@ -123,17 +245,18 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
   def computeBarnesHut(): Unit = {
     val bodies = (0 until graph.numVertices).map(v => Body(pos(v), v))
 
-    val quadtree = new QuadTree(bounds, bodies)
-    cforRange(0 until graph.numVertices)( v => apply(v, quadtree.root) )
+    val qt = new quadtree.QuadTree(getBounds, bodies)
+//    cforRange(0 until graph.numVertices)( v => applyOld(v, qt.root) )
+    cforRange(0 until graph.numVertices)( v => applyNew(v, newQT) )
 
-    def apply(v: Int, quad: Quad): Unit = {
+    def applyOld(v: Int, quad: Quad): Unit = {
       val s = (quad.bounds.width + quad.bounds.height) / 2
       val d = (quad.center - pos(v)).magnitude
       if (s/d > THETA) {
         // Nearby quad
         quad.children match {
           case Opt(seq) =>
-            cforRange(0 until seq.size)( i => apply(v, seq(i)) )
+            cforRange(0 until seq.size)( i => applyOld(v, seq(i)) )
           case _ => quad.body match {
             case Opt(b) =>
               val d = b.pos - pos(v)
@@ -154,6 +277,28 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
       }
     }
 
+    def applyNew(v: Int, quad: QuadTree): Unit = {
+      val s = (quad.width + quad.height) / 2
+      val d = (quad.center - pos(v)).magnitude
+      quad match {
+        case ql: QuadLeaf if ql.v != v =>
+          val d = pos(ql.v) - pos(v)
+          val distance = d.magnitude
+          val direction = d.normalize
+          frc(v) += direction :* (REPULSION / (distance * distance * 0.5f))
+        case qb: QuadBranch if s/d > THETA => // nearby quad
+          if (qb.tl.nonEmpty) applyNew(v, qb.tl.get)
+          if (qb.tr.nonEmpty) applyNew(v, qb.tr.get)
+          if (qb.bl.nonEmpty) applyNew(v, qb.bl.get)
+          if (qb.br.nonEmpty) applyNew(v, qb.br.get)
+        case qb: QuadBranch => // far-away quad
+          val d = qb.center - pos(v)
+          val distance = d.magnitude
+          val direction = d.normalize
+          frc(v) += direction :* (REPULSION * quad.bodies / (distance * distance * 0.5f))
+        case _ =>
+      }
+    }
   }
 
   def computeDrag(): Unit =
@@ -173,7 +318,7 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
     computeGravity()
   }
 
-  def updateVelocitiesAndPositions(): Unit =
+  def updateVelocitiesAndPositions(): Unit = {
     cforRange(0 until graph.numVertices) { v =>
       val acceleration = frc(v) :/ graph.mass(v)
       frc(v) = Float2D.zero
@@ -181,7 +326,22 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
       if (vel(v).magnitude > MAX_VELOCITY)
         vel(v) = vel(v).normalize :* MAX_VELOCITY
       pos(v) += vel(v) :* TIMESTEP
+      val x = posX(v)
+      val y = posY(v)
+      if (v == 0) {
+        minX = x
+        maxX = x
+        minY = y
+        maxY = y
+      } else {
+        minX = scala.math.min(minX, x)
+        minY = scala.math.min(minY, y)
+        maxX = scala.math.max(maxX, x)
+        maxY = scala.math.max(maxY, y)
+      }
     }
+    updateQuadTree()
+  }
 
   def totalKinematicEnergy =
     (0 until graph.numVertices).aggregate(0.0f)(
@@ -194,23 +354,6 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
     updateVelocitiesAndPositions()
   }
 
-  def bounds = {
-    var minX = posX(0)
-    var maxX = minX
-    var minY = posY(0)
-    var maxY = minY
-
-    cforRange(1 until graph.numVertices) { v =>
-      val x = posX(v)
-      val y = posY(v)
-      minX = scala.math.min(minX, x)
-      minY = scala.math.min(minY, y)
-      maxX = scala.math.max(maxX, x)
-      maxY = scala.math.max(maxY, y)
-    }
-    Bounds(minX, minY, maxX, maxY)
-  }
-  
   def getNearestNode(pt: Float2D) = {
     var nearest = 0
     var minDistance = (pos(0) - pt).magnitude
