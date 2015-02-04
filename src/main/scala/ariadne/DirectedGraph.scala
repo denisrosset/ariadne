@@ -21,6 +21,7 @@ trait DirectedGraph[V, E] {
 
   def endVertices(e: EIndex): Set[VIndex] = Set(head(e), tail(e))
   def edges(v: VIndex): Set[EIndex] = inEdges(v) ++ outEdges(v)
+  def degree(v: VIndex): Int = inEdges(v).size + outEdges(v).size
 
   def mass(v: VIndex): Float
   def weight(e: EIndex): Float
@@ -43,6 +44,6 @@ case class ThisDirectedGraph(sourceNodes: Seq[Node], sourceEdges: Seq[Edge]) ext
     (0 until numVertices).map(v => (0 until numEdges).filter(e => tail(e) == v).toSet)
   def inEdges(v: VIndex) = inEdgesSeq(v)
   def outEdges(v: VIndex) = outEdgesSeq(v)
-  def mass(v: VIndex): Float = sourceNodes(v).mass * (1 + edges(v).size / 3)
+  def mass(v: VIndex): Float = sourceNodes(v).mass * (1 + degree(v) / 3)
   def weight(e: EIndex): Float = sourceEdges(e).weight
 }
