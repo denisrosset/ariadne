@@ -27,45 +27,99 @@ trait Layout {
   }
 }
 
-/**
- * A force directed graph layout implementation. Parts of this code are ported from the Springy
- * JavaScript library (http://getspringy.com/) by Dennis Hotson. Physics model parameters are based 
- * on those used in the JavaScript libary VivaGraphJS (https://github.com/anvaka/VivaGraphJS) by 
- * Andrei Kashcha. 
- * @author Rainer Simon <rainer.simon@ait.ac.at>
- */
-class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
-    
-  /** Repulsion constant **/
-  private var REPULSION = -1.2f
-  
-  /** 'Gravity' constant pulling towards origin **/
-  private var CENTER_GRAVITY = -1e-4f
-  
-  /** Default spring length **/
-  private var SPRING_LENGTH = 50.0f
-  
-  /** Spring stiffness constant **/
-  private var SPRING_COEFFICIENT = 0.0002f
-  
-  /** Drag coefficient **/
-  private var DRAG = -0.02f
-  
+trait ForceLayout extends Layout {
   /** Time-step increment **/
-  private val TIMESTEP = 20
-  
-  /** Node velocity limit **/
-  private val MAX_VELOCITY = 1.0f
-  
-  /** Barnes-Hut Theta Threshold **/
-  private val THETA = 0.8f
+  protected def TIMESTEP = 20
 
-  val posX: Array[Float] = new Array[Float](graph.numVertices)
-  val posY: Array[Float] = new Array[Float](graph.numVertices)
-  val velX: Array[Float] = new Array[Float](graph.numVertices)
-  val velY: Array[Float] = new Array[Float](graph.numVertices)
-  val frcX: Array[Float] = new Array[Float](graph.numVertices)
-  val frcY: Array[Float] = new Array[Float](graph.numVertices)
+  /** Node velocity limit **/
+  protected def MAX_VELOCITY = 1.0f
+
+  def n: Int
+
+  val posX: Array[Float]
+  val posY: Array[Float]
+  val velX: Array[Float]
+  val velY: Array[Float]
+  val frcX: Array[Float]
+  val frcY: Array[Float]
+
+  def vertexPosition(v: VIndex): Float2D = pos(v)
+
+  object pos {
+    def apply(v: Int): Float2D = Float2D(posX(v), posY(v))
+    def update(v: Int, vec: Float2D): Unit = {
+      posX(v) = vec.x
+      posY(v) = vec.y
+    }
+  }
+  object vel {
+    def apply(v: Int): Float2D = Float2D(velX(v), velY(v))
+    def update(v: Int, vec: Float2D): Unit = {
+      velX(v) = vec.x
+      velY(v) = vec.y
+    }
+  }
+  object frc {
+    def apply(v: Int): Float2D = Float2D(frcX(v), frcY(v))
+    def update(v: Int, vec: Float2D): Unit = {
+      frcX(v) = vec.x
+      frcY(v) = vec.y
+    }
+  }
+
+  var minX: Float = -1.0f
+  var minY: Float = -1.0f
+  var maxX: Float = 1.0f
+  var maxY: Float = 1.0f
+  var totalKinematicEnergy: Float = 0.0f
+
+  def updateForces(): Unit = { }
+
+  def postVelocitiesAndPositionsUpdate(): Unit = { }
+
+  def updateVelocitiesAndPositions(): Unit = {
+    totalKinematicEnergy = 0.0f
+    cforRange(0 until n) { v =>
+      val acceleration = frc(v) :/ graph.mass(v)
+      frc(v) = Float2D.zero
+      vel(v) += acceleration :* TIMESTEP
+      val vm2 = vel(v).magnitude2
+      if (vm2 > MAX_VELOCITY * MAX_VELOCITY)
+        vel(v) = vel(v).normalize :* MAX_VELOCITY
+      totalKinematicEnergy += 0.5f * graph.mass(v) * vm2
+      pos(v) += vel(v) :* TIMESTEP
+      val x = posX(v)
+      val y = posY(v)
+      if (v == 0) {
+        minX = x
+        maxX = x
+        minY = y
+        maxY = y
+      } else {
+        minX = scala.math.min(minX, x)
+        minY = scala.math.min(minY, y)
+        maxX = scala.math.max(maxX, x)
+        maxY = scala.math.max(maxY, y)
+      }
+    }
+    postVelocitiesAndPositionsUpdate()
+  }
+
+  def step(): Unit = {
+    updateForces()
+    updateVelocitiesAndPositions()
+  }
+}
+
+
+trait Electrostatic extends ForceLayout {
+  self: SpringLayout =>
+
+  /** Repulsion constant **/
+  protected def REPULSION = -1.2f
+
+  /** Barnes-Hut Theta Threshold **/
+  protected def THETA = 0.8f
 
   sealed trait QuadTree {
     def minX: Float
@@ -205,38 +259,6 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
     def computeCom(): Unit = { } // do nothing
   }
 
-
-  def getBounds = Bounds(minX, minY, maxX, maxY)
-
-  def vertexPosition(v: VIndex): Float2D = pos(v)
-
-  object pos {
-    def apply(v: Int): Float2D = Float2D(posX(v), posY(v))
-    def update(v: Int, vec: Float2D): Unit = {
-      posX(v) = vec.x
-      posY(v) = vec.y
-    }
-  }
-  object vel {
-    def apply(v: Int): Float2D = Float2D(velX(v), velY(v))
-    def update(v: Int, vec: Float2D): Unit = {
-      velX(v) = vec.x
-      velY(v) = vec.y
-    }
-  }
-  object frc {
-    def apply(v: Int): Float2D = Float2D(frcX(v), frcY(v))
-    def update(v: Int, vec: Float2D): Unit = {
-      frcX(v) = vec.x
-      frcY(v) = vec.y
-    }
-  }
-
-  var minX: Float = -1.0f
-  var minY: Float = -1.0f
-  var maxX: Float = 1.0f
-  var maxY: Float = 1.0f
-
   var newQT: QuadTree = _
 
   def updateQuadTree(): Unit = {
@@ -247,18 +269,55 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
     newQT = newQuad.result()
   }
 
-  def initVec(v: Int): Unit = {
-    pos(v) = Float2D.random(1.0f)
-    vel(v) = Float2D(0, 0)
-    frc(v) = Float2D(0, 0)
-  }
-
-  private def buildGraph(): Unit = {
-    cforRange(0 until graph.numVertices)( i => initVec(i) )
+  override def postVelocitiesAndPositionsUpdate(): Unit = {
+    super.postVelocitiesAndPositionsUpdate()
     updateQuadTree()
   }
 
-  buildGraph()
+  override def updateForces(): Unit = {
+    super.updateForces()
+    computeBarnesHut()
+  }
+
+  def computeBarnesHut(): Unit = {
+    cforRange(0 until graph.numVertices)( v => apply(v, newQT) )
+
+    def apply(v: Int, quad: QuadTree): Unit = {
+      quad match {
+        case ql: QuadLeaf =>
+          if (ql.v != v) {
+            val d = pos(ql.v) - pos(v)
+            val distance2 = d.magnitude2
+            val direction = d.normalize
+            frc(v) += direction :* (REPULSION / (distance2 * 0.5f))
+          }
+        case qb: QuadBranch =>
+          val s = (qb.width + qb.height) / 2
+          val d = qb.com - pos(v)
+          val dm2 = d.magnitude2
+
+          if (s*s/dm2 > THETA*THETA) { // nearby quad
+            if (qb.tl.nonEmpty) apply(v, qb.tl.get)
+            if (qb.tr.nonEmpty) apply(v, qb.tr.get)
+            if (qb.bl.nonEmpty) apply(v, qb.bl.get)
+            if (qb.br.nonEmpty) apply(v, qb.br.get)
+          } else {
+            val dm = d.magnitude
+            frc(v) += d :* (REPULSION * quad.bodies / (dm * dm2 * 0.5f))
+          }
+      }
+    }
+  }
+}
+
+trait Hookes extends ForceLayout {
+  self: SpringLayout =>
+
+  /** Default spring length **/
+  protected def SPRING_LENGTH = 50.0f
+  
+  /** Spring stiffness constant **/
+  protected def SPRING_COEFFICIENT = 0.0002f
 
   def computeHookesLaw(): Unit =
     cforRange(0 until graph.numEdges) { e =>
@@ -277,97 +336,92 @@ class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends Layout {
       frc(h) -= force
     }
 
-  def computeBarnesHut(): Unit = {
-    cforRange(0 until graph.numVertices)( v => apply(v, newQT) )
-
-    def apply(v: Int, quad: QuadTree): Unit = {
-      val s = (quad.width + quad.height) / 2
-      val d = (quad.center - pos(v)).magnitude
-      quad match {
-        case ql: QuadLeaf if ql.v != v =>
-          val d = pos(ql.v) - pos(v)
-          val distance = d.magnitude
-          val direction = d.normalize
-          frc(v) += direction :* (REPULSION / (distance * distance * 0.5f))
-        case qb: QuadBranch if s/d > THETA => // nearby quad
-          if (qb.tl.nonEmpty) apply(v, qb.tl.get)
-          if (qb.tr.nonEmpty) apply(v, qb.tr.get)
-          if (qb.bl.nonEmpty) apply(v, qb.bl.get)
-          if (qb.br.nonEmpty) apply(v, qb.br.get)
-        case qb: QuadBranch => // far-away quad
-          val d = qb.com - pos(v)
-          val distance = d.magnitude
-          val direction = d.normalize
-          frc(v) += direction :* (REPULSION * quad.bodies / (distance * distance * 0.5f))
-        case _ =>
-      }
-    }
+  override def updateForces(): Unit = {
+    super.updateForces()
+    computeHookesLaw()
   }
+}
 
-  def computeDrag(): Unit =
-    cforRange(0 until graph.numVertices) { v =>
-      frc(v) += vel(v) :* DRAG
-    }
-  
+trait Gravity extends ForceLayout {
+  self: SpringLayout =>
+
+  /** 'Gravity' constant pulling towards origin **/
+  protected def CENTER_GRAVITY = -1e-4f
+
   def computeGravity(): Unit =
     cforRange(0 until graph.numVertices) { v =>
       frc(v) += pos(v).normalize :* (CENTER_GRAVITY * graph.mass(v))
     }
 
-  def updateForces(): Unit = {
-    computeHookesLaw()
-    computeBarnesHut()
-    computeDrag()
+  override def updateForces(): Unit = {
+    super.updateForces()
     computeGravity()
   }
+}
 
-  def updateVelocitiesAndPositions(): Unit = {
+trait Drag extends ForceLayout {
+  self: SpringLayout =>
+
+  /** Drag coefficient **/
+  protected def DRAG = -0.02f
+
+  def computeDrag(): Unit =
     cforRange(0 until graph.numVertices) { v =>
-      val acceleration = frc(v) :/ graph.mass(v)
-      frc(v) = Float2D.zero
-      vel(v) += acceleration :* TIMESTEP
-      if (vel(v).magnitude > MAX_VELOCITY)
-        vel(v) = vel(v).normalize :* MAX_VELOCITY
-      pos(v) += vel(v) :* TIMESTEP
-      val x = posX(v)
-      val y = posY(v)
-      if (v == 0) {
-        minX = x
-        maxX = x
-        minY = y
-        maxY = y
-      } else {
-        minX = scala.math.min(minX, x)
-        minY = scala.math.min(minY, y)
-        maxX = scala.math.max(maxX, x)
-        maxY = scala.math.max(maxY, y)
-      }
+      frc(v) += vel(v) :* DRAG
     }
+
+  override def updateForces(): Unit = {
+    super.updateForces()
+    computeDrag()
+  }
+}
+
+/**
+  * A force directed graph layout implementation. Parts of this code are ported from the Springy
+  * JavaScript library (http://getspringy.com/) by Dennis Hotson. Physics model parameters are based 
+  * on those used in the JavaScript libary VivaGraphJS (https://github.com/anvaka/VivaGraphJS) by 
+  * Andrei Kashcha. 
+  * @author Rainer Simon <rainer.simon@ait.ac.at>
+  */
+class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends ForceLayout with Electrostatic with Hookes with Gravity with Drag {
+
+  val n = graph.numVertices
+
+  val posX: Array[Float] = new Array[Float](n)
+  val posY: Array[Float] = new Array[Float](n)
+  val velX: Array[Float] = new Array[Float](n)
+  val velY: Array[Float] = new Array[Float](n)
+  val frcX: Array[Float] = new Array[Float](n)
+  val frcY: Array[Float] = new Array[Float](n)
+  
+  def getBounds = Bounds(minX, minY, maxX, maxY)
+
+  def initVec(v: Int): Unit = {
+    pos(v) = Float2D.random(1.0f)
+    vel(v) = Float2D(0, 0)
+    frc(v) = Float2D(0, 0)
+  }
+
+  private def buildGraph(): Unit = {
+    cforRange(0 until graph.numVertices)( i => initVec(i) )
     updateQuadTree()
   }
 
-  def totalKinematicEnergy =
-    (0 until graph.numVertices).aggregate(0.0f)(
-      (acc, v) => acc + 0.5f * graph.mass(v) * vel(v).magnitude2,
-      _ + _
-    )
-
-  def step(): Unit = {
-    updateForces()
-    updateVelocitiesAndPositions()
-  }
+  buildGraph()
 
   def getNearestNode(pt: Float2D) = {
     var nearest = 0
-    var minDistance = (pos(0) - pt).magnitude
+    var minDistance2 = (pos(0) - pt).magnitude2
 
     cforRange(1 until graph.numVertices) { v =>
-      val distance = (pos(v) - pt).magnitude
-      if (distance < minDistance) {
-        minDistance = distance
+      val distance2 = (pos(v) - pt).magnitude2
+      if (distance2 < minDistance2) {
+        minDistance2 = distance2
         nearest = v
       }
     }
     nearest
   }
 }
+
+
