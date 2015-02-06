@@ -7,8 +7,6 @@ import spire.syntax.cfor._
 import spire.util.Opt
 
 trait Hookes extends ForceLayout {
-  self: SpringLayout =>
-
   /** Default spring length **/
   protected def SPRING_LENGTH = 50.0f
   
@@ -19,17 +17,31 @@ trait Hookes extends ForceLayout {
     cforRange(0 until graph.numEdges) { e =>
       val t = graph.tail(e)
       val h = graph.head(e)
-      val tPos = pos(t)
-      val hPos = pos(h)
-      val d = if (hPos == tPos)
-        Float2D.random(0.1f, tPos)
-      else
-        hPos - tPos
-      val displacement = d.magnitude - SPRING_LENGTH / graph.weight(e)
-      val coeff = SPRING_COEFFICIENT * displacement / d.magnitude
-      val force = d :* (coeff * 0.5f)
-      frc(t) += force
-      frc(h) -= force
+      val tX = posX(t)
+      val tY = posY(t)
+      val hX = posX(h)
+      val hY = posY(h)
+      var dX = 0.0f
+      var dY = 0.0f
+      if (hX == tX && hY == tY) {
+        val d = Float2D.random(0.1f, Float2D(tX, tY))
+        dX = d.x
+        dY = d.y
+      } else {
+        dX = hX - tX
+        dY = hY - tY
+      }
+      val dM2 = dX*dX + dY*dY
+      val dRM = Utils.fastInverseSquareRoot(dM2)
+      val dM = dM2*dRM
+      val disp = dM - SPRING_LENGTH / graph.weight(e)
+      val coeff = SPRING_COEFFICIENT * disp * dRM
+      val forceX = dX * (coeff * 0.5f)
+      val forceY = dY * (coeff * 0.5f)
+      frcX(t) += forceX
+      frcY(t) += forceY
+      frcX(h) -= forceX
+      frcY(h) -= forceY
     }
 
   override def updateForces(): Unit = {

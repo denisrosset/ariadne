@@ -17,8 +17,12 @@ trait ForceLayout extends Layout {
 
   val posX: Array[Float]
   val posY: Array[Float]
+  @inline final def posM2(v: VIndex) = posX(v)*posX(v) + posY(v)*posY(v)
+  @inline final def posRM(v: VIndex) = Utils.fastInverseSquareRoot(posM2(v))
   val velX: Array[Float]
   val velY: Array[Float]
+  @inline final def velM2(v: VIndex) = velX(v)*velX(v) + velY(v)*velY(v)
+  @inline final def velRM(v: VIndex) = Utils.fastInverseSquareRoot(velM2(v))
   val frcX: Array[Float]
   val frcY: Array[Float]
 
@@ -59,14 +63,22 @@ trait ForceLayout extends Layout {
   def updateVelocitiesAndPositions(): Unit = {
     totalKinematicEnergy = 0.0f
     cforRange(0 until n) { v =>
-      val acceleration = frc(v) :/ graph.mass(v)
-      frc(v) = Float2D.zero
-      vel(v) += acceleration :* TIMESTEP
-      val vm2 = vel(v).magnitude2
-      if (vm2 > MAX_VELOCITY * MAX_VELOCITY)
-        vel(v) = vel(v).normalize :* MAX_VELOCITY
+      val invMass = 1.0f / graph.mass(v)
+      val accX = frcX(v) * invMass
+      val accY = frcY(v) * invMass
+      frcX(v) = 0.0f
+      frcY(v) = 0.0f
+      velX(v) += accX * TIMESTEP
+      velY(v) += accY * TIMESTEP
+      val vm2 = velM2(v)
+      if (vm2 > MAX_VELOCITY * MAX_VELOCITY) {
+        val factor = velRM(v)
+        velX(v) = velX(v) * factor * MAX_VELOCITY
+        velY(v) = velY(v) * factor * MAX_VELOCITY
+      }
       totalKinematicEnergy += 0.5f * graph.mass(v) * vm2
-      pos(v) += vel(v) :* TIMESTEP
+      posX(v) += velX(v) * TIMESTEP
+      posY(v) += velY(v) * TIMESTEP
       val x = posX(v)
       val y = posY(v)
       if (v == 0) {

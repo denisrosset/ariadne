@@ -180,15 +180,19 @@ trait Electrostatic extends ForceLayout {
       quad match {
         case ql: QuadLeaf =>
           if (ql.v != v) {
-            val d = pos(ql.v) - pos(v)
-            val distance2 = d.magnitude2
-            val direction = d.normalize
-            frc(v) += direction :* (REPULSION / (distance2 * 0.5f))
+            val dX = posX(ql.v) - posX(v)
+            val dY = posY(ql.v) - posY(v)
+            val dm2 = dX*dX + dY*dY
+            val dm = Utils.fastSquareRoot(dm2)
+            val factor = REPULSION / (dm * dm2 * 0.5f)
+            frcX(v) += dX * factor
+            frcY(v) += dY * factor
           }
         case qb: QuadBranch =>
           val s = (qb.width + qb.height) / 2
-          val d = qb.com - pos(v)
-          val dm2 = d.magnitude2
+          val dX = qb.comX - posX(v)
+          val dY = qb.comY - posY(v)
+          val dm2 = dX*dX + dY*dY
 
           if (s*s/dm2 > THETA*THETA) { // nearby quad
             if (qb.tl.nonEmpty) apply(v, qb.tl.get)
@@ -196,8 +200,10 @@ trait Electrostatic extends ForceLayout {
             if (qb.bl.nonEmpty) apply(v, qb.bl.get)
             if (qb.br.nonEmpty) apply(v, qb.br.get)
           } else {
-            val dm = d.magnitude
-            frc(v) += d :* (REPULSION * quad.bodies / (dm * dm2 * 0.5f))
+            val dm = Utils.fastSquareRoot(dm2)
+            val factor = REPULSION * quad.bodies / (dm * dm2 * 0.5f)
+            frcX(v) += dX * factor
+            frcY(v) += dY * factor
           }
       }
     }

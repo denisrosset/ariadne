@@ -6,8 +6,6 @@ import scala.collection.parallel.ParSeq
 import spire.syntax.cfor._
 import spire.util.Opt
 
-import quadtree._
-
 trait DirectedGraph[V, E] {
   def numVertices: Int
   def numEdges: Int
