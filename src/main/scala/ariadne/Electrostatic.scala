@@ -7,7 +7,8 @@ import spire.syntax.cfor._
 import spire.util.Opt
 
 trait Electrostatic extends ForceLayout {
-  self: SpringLayout =>
+
+  def graph: DirectedGraph with MassGraph with ElectrostaticGraph
 
   /** Repulsion constant **/
   protected def REPULSION = -1.2f
@@ -25,9 +26,8 @@ trait Electrostatic extends ForceLayout {
     def com: Float2D = Float2D(comX, comY)
     def width = maxX - minX
     def height = maxY - minY
-    // TODO: compute the real center of mass
     def center = Float2D((minX + maxX) / 2, (minY + maxY) / 2)
-    def bodies: Int
+    def charge: Float
   }
 
   sealed trait QuadTreeBuilder extends QuadTree { self =>
@@ -48,7 +48,6 @@ trait Electrostatic extends ForceLayout {
 
   sealed trait QuadLeaf extends QuadTree {
     def v: VIndex
-    def bodies = 1
   }
 
   final class QuadBranchBuilder(
@@ -56,7 +55,7 @@ trait Electrostatic extends ForceLayout {
     val minY: Float,
     val maxX: Float,
     val maxY: Float,
-    var bodies: Int = 0,
+    var charge: Float = 0.0f,
     var comX: Float = 0.0f,
     var comY: Float = 0.0f,
     var tl: Opt[QuadTreeBuilder] = Opt.empty[QuadTreeBuilder],
@@ -69,30 +68,30 @@ trait Electrostatic extends ForceLayout {
     val midX = (minX + maxX) / 2
     val midY = (minY + maxY) / 2
     def withPoint(w: VIndex): QuadBranchBuilder = {
-      bodies += 1
+      charge += graph.charge(w)
       val verX = posX(w)
       val verY = posY(w)
       if (verY < midY) { // top
         if (verX < midX) // left
           tl = Opt(tl match {
             case Opt(q) => q.withPoint(w)
-            case _ => new QuadLeafBuilder(minX, minY, midX, midY, w)
+            case _ => new QuadLeafBuilder(minX, minY, midX, midY, w, graph.charge(w))
           })
           else // right
             tr = Opt(tr match {
               case Opt(q) => q.withPoint(w)
-              case _ => new QuadLeafBuilder(midX, minY, maxX, midY, w)
+              case _ => new QuadLeafBuilder(midX, minY, maxX, midY, w, graph.charge(w))
             })
       } else { // bottom
         if (verX < midX) // left
           bl = Opt(bl match {
             case Opt(q) => q.withPoint(w)
-            case _ => new QuadLeafBuilder(minX, midY, midX, maxY, w)
+            case _ => new QuadLeafBuilder(minX, midY, midX, maxY, w, graph.charge(w))
           })
           else
             br = Opt(br match {
               case Opt(q) => q.withPoint(w)
-              case _ => new QuadLeafBuilder(midX, midY, maxX, maxY, w)
+              case _ => new QuadLeafBuilder(midX, midY, maxX, maxY, w, graph.charge(w))
             })
       }
       this
@@ -101,11 +100,11 @@ trait Electrostatic extends ForceLayout {
       def getWeighted(qOpt: Opt[QuadTreeBuilder]): Float2D = qOpt match {
         case Opt(q) =>
           q.computeCom()
-          Float2D(q.comX, q.comY) :* q.bodies
+          Float2D(q.comX, q.comY) :* q.charge
         case _ => Float2D.zero
       }
       val weighted = getWeighted(tl) + getWeighted(tr) + getWeighted(bl) + getWeighted(br)
-      val com = weighted :/ bodies
+      val com = weighted :/ charge
       comX = com.x
       comY = com.y
     }
@@ -116,15 +115,18 @@ trait Electrostatic extends ForceLayout {
     var minY: Float,
     var maxX: Float,
     var maxY: Float,
-    var v: VIndex) extends QuadLeaf with QuadTreeBuilder {
+    var v: VIndex,
+    var charge: Float) extends QuadLeaf with QuadTreeBuilder {
     def comX = posX(v)
     def comY = posY(v)
+    if (minX >= maxX) println((minX, maxX))
+    if (minY >= maxY) println((minY, maxY))
     require(minX < maxX)
     require(minY < maxY)
     def midX: Float = (minX + maxX) / 2
     def midY: Float = (minY + maxY) / 2
     def subdivided: QuadBranchBuilder = {
-      val replacedBy = new QuadBranchBuilder(minX, minY, maxX, maxY, 1)
+      val replacedBy = new QuadBranchBuilder(minX, minY, maxX, maxY, charge)
       val verX = posX(v)
       val verY = posY(v)
       if (verY < midY) { // top
@@ -201,12 +203,16 @@ trait Electrostatic extends ForceLayout {
             if (qb.br.nonEmpty) apply(v, qb.br.get)
           } else {
             val dm = Utils.fastSquareRoot(dm2)
-            val factor = REPULSION * quad.bodies / (dm * dm2 * 0.5f)
+            val factor = REPULSION * quad.charge / (dm * dm2 * 0.5f)
             frcX(v) += dX * factor
             frcY(v) += dY * factor
           }
       }
     }
+  }
+  override def postInit(): Unit = {
+    super.postInit()
+    updateQuadTree()
   }
 }
 

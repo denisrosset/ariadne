@@ -13,30 +13,4 @@ import spire.util.Opt
   * Andrei Kashcha. 
   * @author Rainer Simon <rainer.simon@ait.ac.at>
   */
-class SpringLayout(val graph: DirectedGraph[Node, Edge]) extends ForceLayout with Electrostatic with Hookes with Gravity with Drag {
-
-  val n = graph.numVertices
-
-  val posX: Array[Float] = new Array[Float](n)
-  val posY: Array[Float] = new Array[Float](n)
-  val velX: Array[Float] = new Array[Float](n)
-  val velY: Array[Float] = new Array[Float](n)
-  val frcX: Array[Float] = new Array[Float](n)
-  val frcY: Array[Float] = new Array[Float](n)
-  
-  def getBounds = Bounds(minX, minY, maxX, maxY)
-
-  def initVec(v: Int): Unit = {
-    pos(v) = Float2D.random(1.0f)
-    vel(v) = Float2D(0, 0)
-    frc(v) = Float2D(0, 0)
-  }
-
-  private def buildGraph(): Unit = {
-    cforRange(0 until graph.numVertices)( i => initVec(i) )
-    updateQuadTree()
-  }
-
-  buildGraph()
-
-}
+class SpringLayout(val graph: DirectedGraph with ElectrostaticGraph with MassGraph with EdgeWeightedGraph) extends ForceLayout with Electrostatic with Hookes with Gravity with Drag

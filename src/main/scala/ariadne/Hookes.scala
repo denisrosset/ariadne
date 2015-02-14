@@ -7,6 +7,8 @@ import spire.syntax.cfor._
 import spire.util.Opt
 
 trait Hookes extends ForceLayout {
+  def graph: DirectedGraph with MassGraph with EdgeWeightedGraph
+
   /** Default spring length **/
   protected def SPRING_LENGTH = 50.0f
   
@@ -34,7 +36,7 @@ trait Hookes extends ForceLayout {
       val dM2 = dX*dX + dY*dY
       val dRM = Utils.fastInverseSquareRoot(dM2)
       val dM = dM2*dRM
-      val disp = dM - SPRING_LENGTH / graph.weight(e)
+      val disp = dM - SPRING_LENGTH / graph.edgeWeight(e)
       val coeff = SPRING_COEFFICIENT * disp * dRM
       val forceX = dX * (coeff * 0.5f)
       val forceY = dY * (coeff * 0.5f)

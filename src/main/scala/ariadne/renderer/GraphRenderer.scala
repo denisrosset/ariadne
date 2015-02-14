@@ -35,7 +35,7 @@ case class Viewpoint(layoutBounds: Bounds, canvasSize: Int2D,
 
 private[renderer] trait GraphRenderer {
   def gLayout: SpringLayout
-  def graph: DirectedGraph[Node, Edge] = gLayout.graph
+  def graph: DirectedGraph with MassGraph with EdgeWeightedGraph with VertexSeqGraph[Node] with EdgeSeqGraph[Edge]
 
   private var lastCompletion: Long = System.currentTimeMillis
 
@@ -49,7 +49,7 @@ private[renderer] trait GraphRenderer {
 
   val edgeColor = new Color(198, 198, 198, 198)
   def paintEdge(g2d: Graphics2D, viewpoint: Viewpoint, e: EIndex): Unit = {
-    val width = Math.min(4, Math.max(2, Math.min(8, graph.weight(e))).toInt / 2)
+    val width = Math.min(4, Math.max(2, Math.min(8, graph.edgeWeight(e))).toInt / 2)
     g2d.setStroke(new BasicStroke(width));
     g2d.setColor(edgeColor)
     val t = graph.tail(e)
@@ -60,7 +60,6 @@ private[renderer] trait GraphRenderer {
   }
 
   def render(g2d: Graphics2D, layout: SpringLayout, selectedNode: Option[Int] = None, viewpoint: Viewpoint, showLabels: Boolean = false): Unit = {
-    val graph = layout.graph
     import viewpoint.{canvasWidth, canvasHeight, offsetX, offsetY, zoom, c, d}
     g2d.setColor(Color.WHITE)
     g2d.fillRect(0, 0, canvasWidth, canvasHeight)
@@ -78,7 +77,7 @@ private[renderer] trait GraphRenderer {
         val fromI = graph.tail(e)
         val fromN = graph.vertex(fromI)
         val from = (layout.pos(fromI) :* c.toFloat) + d
-        val width = Math.min(4, Math.max(2, Math.min(8, graph.weight(e))).toInt / 2)
+        val width = Math.min(4, Math.max(2, Math.min(8, graph.edgeWeight(e))).toInt / 2)
         val edge = graph.edge(e)
         g2d.setStroke(new BasicStroke(width));
         g2d.setColor(Color.GREEN)
@@ -92,7 +91,7 @@ private[renderer] trait GraphRenderer {
         val toI = graph.head(e)
         val toN = graph.vertex(toI)
         val to = (layout.pos(toI) :* c.toFloat) + d
-        val width = Math.min(4, Math.max(2, Math.min(8, graph.weight(e))).toInt / 2)
+        val width = Math.min(4, Math.max(2, Math.min(8, graph.edgeWeight(e))).toInt / 2)
     
         g2d.setStroke(new BasicStroke(width));
         g2d.setColor(Color.RED)

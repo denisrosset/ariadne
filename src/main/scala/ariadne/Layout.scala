@@ -7,7 +7,8 @@ import spire.syntax.cfor._
 import spire.util.Opt
 
 trait Layout {
-  def graph: DirectedGraph[Node, Edge]
+  def n: Int // number of vertices
+  def graph: DirectedGraph
   def vertexPosition(v: VIndex): Float2D
   def step(): Unit
   def totalKinematicEnergy: Float
@@ -20,7 +21,7 @@ trait Layout {
       if (onIteration != null)
         onIteration(it)
       it += 1
-    } while (totalKinematicEnergy > 0.001f && it < maxIterations)
+    } while (totalKinematicEnergy/n > 0.000001f && it < maxIterations)
       
     if (onComplete != null)
       onComplete(it)

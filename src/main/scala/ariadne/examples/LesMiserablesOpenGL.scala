@@ -15,7 +15,7 @@ object LesMiserablesOpenGL extends App {
   val nodes: Seq[Node] = json.nodes.get[List[Json]].map(json => {
       val name = json.name.get[String].toString
       val group = json.group.get[Int]
-      Node(name, name, 1.0f, group)
+      Node(name, 1.0f, group)
     })
     
   val edges = json.links.get[List[Json]].map(json => {
@@ -27,7 +27,7 @@ object LesMiserablesOpenGL extends App {
 
   val layout = new SpringLayout(graph)
 
-  val vis = new OpenGLInteractiveGraphRenderer(layout)
+  val vis = new OpenGLInteractiveGraphRenderer(graph, layout)
   
   val frame = new JFrame("Les Miserables")
   frame.setPreferredSize(new Dimension(920,720))

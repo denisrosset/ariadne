@@ -5,7 +5,7 @@ import java.awt.{ Canvas, Graphics2D, Point, RenderingHints }
 import java.awt.image.BufferStrategy
 import java.awt.event.{ MouseAdapter, MouseEvent, MouseWheelListener, MouseWheelEvent }
 
-class OpenGLInteractiveGraphRenderer(val gLayout: SpringLayout) extends Canvas with GraphRenderer {
+class OpenGLInteractiveGraphRenderer(val graph: DirectedGraph with MassGraph with ElectrostaticGraph with EdgeWeightedGraph with EdgeSeqGraph[Edge] with VertexSeqGraph[Node], val gLayout: SpringLayout) extends Canvas with GraphRenderer {
   
   System.setProperty("sun.java2d.opengl", "True")
   System.setProperty("sun.java2d.ddscale", "True")

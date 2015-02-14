@@ -13,18 +13,19 @@ trait ForceLayout extends Layout {
   /** Node velocity limit **/
   protected def MAX_VELOCITY = 1.0f
 
-  def n: Int
+  def graph: DirectedGraph with MassGraph
+  def n: Int = graph.numVertices
 
-  val posX: Array[Float]
-  val posY: Array[Float]
+  val posX: Array[Float] = new Array[Float](n)
+  val posY: Array[Float] = new Array[Float](n)
   @inline final def posM2(v: VIndex) = posX(v)*posX(v) + posY(v)*posY(v)
   @inline final def posRM(v: VIndex) = Utils.fastInverseSquareRoot(posM2(v))
-  val velX: Array[Float]
-  val velY: Array[Float]
+  val velX: Array[Float] = new Array[Float](n)
+  val velY: Array[Float] = new Array[Float](n)
   @inline final def velM2(v: VIndex) = velX(v)*velX(v) + velY(v)*velY(v)
   @inline final def velRM(v: VIndex) = Utils.fastInverseSquareRoot(velM2(v))
-  val frcX: Array[Float]
-  val frcY: Array[Float]
+  val frcX: Array[Float] = new Array[Float](n)
+  val frcY: Array[Float] = new Array[Float](n)
 
   def vertexPosition(v: VIndex): Float2D = pos(v)
 
@@ -54,13 +55,32 @@ trait ForceLayout extends Layout {
   var minY: Float = -1.0f
   var maxX: Float = 1.0f
   var maxY: Float = 1.0f
+
+  def getBounds = Bounds(minX, minY, maxX, maxY)
+
   var totalKinematicEnergy: Float = 0.0f
 
   def updateForces(): Unit = { }
 
+  def preVelocitiesAndPositionsUpdate(): Unit = { }
   def postVelocitiesAndPositionsUpdate(): Unit = { }
 
+  def initVec(v: Int): Unit = {
+    pos(v) = Float2D.random(1.0f)
+    vel(v) = Float2D(0, 0)
+    frc(v) = Float2D(0, 0)
+  }
+
+  def preInit(): Unit = { }
+  def init(): Unit = {
+    preInit()
+    cforRange(0 until graph.numVertices)( i => initVec(i) )
+    postInit()
+  }
+  def postInit(): Unit = { }
+
   def updateVelocitiesAndPositions(): Unit = {
+    preVelocitiesAndPositionsUpdate()
     totalKinematicEnergy = 0.0f
     cforRange(0 until n) { v =>
       val invMass = 1.0f / graph.mass(v)
@@ -100,4 +120,6 @@ trait ForceLayout extends Layout {
     updateForces()
     updateVelocitiesAndPositions()
   }
+
+  init()
 }
